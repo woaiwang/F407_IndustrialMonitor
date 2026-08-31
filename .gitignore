@@ -1,0 +1,21 @@
+# Keil build output
+*.o
+*.d
+*.axf
+*.hex
+*.bin
+*.map
+*.lst
+*.dep
+
+Objects/
+Listings/
+
+# Keil user settings
+*.uvguix.*
+*.uvoptx
+
+# Temporary
+*.bak
+*.tmp
+~*
