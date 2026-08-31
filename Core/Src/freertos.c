@@ -26,6 +26,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usart.h"
+#include "sensor_manager.h"
 #include <stdio.h>
 
 /* USER CODE END Includes */
@@ -102,6 +103,7 @@ void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
+  SensorManager_Init();
 
   /* USER CODE END Init */
 
@@ -119,7 +121,7 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the queue(s) */
   /* creation of sensorQueue */
-  sensorQueueHandle = osMessageQueueNew (8, 4, &sensorQueue_attributes);
+  sensorQueueHandle = osMessageQueueNew (8, sizeof(SensorData_t), &sensorQueue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -176,15 +178,16 @@ void StartDefaultTask(void *argument)
 void StartSensorTask(void *argument)
 {
   /* USER CODE BEGIN StartSensorTask */
-  uint32_t sensorValue = 0;
+  SensorData_t sensorData;
 
   /* Infinite loop */
   for(;;)
   {
     HAL_GPIO_TogglePin(LED_RED_GPIO_Port, LED_RED_Pin);
 
-    sensorValue++;
-    (void)osMessageQueuePut(sensorQueueHandle, &sensorValue, 0U, 0U);
+    SensorManager_GetData(&sensorData);
+
+    (void)osMessageQueuePut(sensorQueueHandle, &sensorData, 0U, 0U);
 
     osDelay(1000);
   }
@@ -201,24 +204,27 @@ void StartSensorTask(void *argument)
 void StartCommTask(void *argument)
 {
   /* USER CODE BEGIN StartCommTask */
-  uint32_t sensorValue;
-  char msg[48];
+  SensorData_t sensorData;
+  char msg[96];
   int msgLength;
 
   /* Infinite loop */
   for(;;)
   {
     if (osMessageQueueGet(sensorQueueHandle,
-                          &sensorValue,
+                          &sensorData,
                           NULL,
                           osWaitForever) == osOK)
     {
       msgLength = snprintf(msg,
                            sizeof(msg),
-                           "[CommTask] Sensor Data = %lu\r\n",
-                           (unsigned long)sensorValue);
+                           "[Sensor] Raw=%u Voltage=%.3fV Temp=%.1fC Tick=%lu\r\n",
+                           (unsigned int)sensorData.adcRaw,
+                           (double)sensorData.voltage,
+                           (double)sensorData.temperature,
+                           (unsigned long)sensorData.timestamp);
 
-      if (msgLength > 0)
+      if ((msgLength > 0) && (msgLength < (int)sizeof(msg)))
       {
         (void)HAL_UART_Transmit(&huart1,
                                 (uint8_t *)msg,
