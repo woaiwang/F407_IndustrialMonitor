@@ -25,6 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "usart.h"
 
 /* USER CODE END Includes */
 
@@ -168,7 +169,9 @@ void StartSensorTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    HAL_GPIO_TogglePin(LED_RED_GPIO_Port, LED_RED_Pin);
+
+    osDelay(1000);
   }
   /* USER CODE END StartSensorTask */
 }
@@ -183,10 +186,17 @@ void StartSensorTask(void *argument)
 void StartCommTask(void *argument)
 {
   /* USER CODE BEGIN StartCommTask */
+  const char msg[] = "[CommTask] running\r\n";
+
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    HAL_UART_Transmit(&huart1,
+                      (uint8_t *)msg,
+                      sizeof(msg) - 1U,
+                      HAL_MAX_DELAY);
+
+    osDelay(2000);
   }
   /* USER CODE END StartCommTask */
 }
