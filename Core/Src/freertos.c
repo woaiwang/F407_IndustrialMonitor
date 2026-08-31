@@ -26,6 +26,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usart.h"
+#include <stdio.h>
 
 /* USER CODE END Includes */
 
@@ -60,7 +61,7 @@ osThreadId_t SensorTaskHandle;
 const osThreadAttr_t SensorTask_attributes = {
   .name = "SensorTask",
   .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityHigh,
+  .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for CommTask */
 osThreadId_t CommTaskHandle;
@@ -75,6 +76,11 @@ const osThreadAttr_t MonitorTask_attributes = {
   .name = "MonitorTask",
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for sensorQueue */
+osMessageQueueId_t sensorQueueHandle;
+const osMessageQueueAttr_t sensorQueue_attributes = {
+  .name = "sensorQueue"
 };
 
 /* Private function prototypes -----------------------------------------------*/
@@ -110,6 +116,10 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
+
+  /* Create the queue(s) */
+  /* creation of sensorQueue */
+  sensorQueueHandle = osMessageQueueNew (8, 4, &sensorQueue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -166,10 +176,15 @@ void StartDefaultTask(void *argument)
 void StartSensorTask(void *argument)
 {
   /* USER CODE BEGIN StartSensorTask */
+  uint32_t sensorValue = 0;
+
   /* Infinite loop */
   for(;;)
   {
     HAL_GPIO_TogglePin(LED_RED_GPIO_Port, LED_RED_Pin);
+
+    sensorValue++;
+    (void)osMessageQueuePut(sensorQueueHandle, &sensorValue, 0U, 0U);
 
     osDelay(1000);
   }
@@ -186,17 +201,31 @@ void StartSensorTask(void *argument)
 void StartCommTask(void *argument)
 {
   /* USER CODE BEGIN StartCommTask */
-  const char msg[] = "[CommTask] running\r\n";
+  uint32_t sensorValue;
+  char msg[48];
+  int msgLength;
 
   /* Infinite loop */
   for(;;)
   {
-    HAL_UART_Transmit(&huart1,
-                      (uint8_t *)msg,
-                      sizeof(msg) - 1U,
-                      HAL_MAX_DELAY);
+    if (osMessageQueueGet(sensorQueueHandle,
+                          &sensorValue,
+                          NULL,
+                          osWaitForever) == osOK)
+    {
+      msgLength = snprintf(msg,
+                           sizeof(msg),
+                           "[CommTask] Sensor Data = %lu\r\n",
+                           (unsigned long)sensorValue);
 
-    osDelay(2000);
+      if (msgLength > 0)
+      {
+        (void)HAL_UART_Transmit(&huart1,
+                                (uint8_t *)msg,
+                                (uint16_t)msgLength,
+                                HAL_MAX_DELAY);
+      }
+    }
   }
   /* USER CODE END StartCommTask */
 }
