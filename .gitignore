@@ -19,3 +19,7 @@ Listings/
 *.bak
 *.tmp
 ~*
+
+# Keil generated reports
+*.build_log.htm
+MDK-ARM/**/*.htm
