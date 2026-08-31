@@ -27,6 +27,8 @@
 /* USER CODE BEGIN Includes */
 #include "usart.h"
 #include "sensor_manager.h"
+#include "bsp_uart.h"
+#include "protocol.h"
 #include <stdio.h>
 
 /* USER CODE END Includes */
@@ -86,6 +88,10 @@ const osMessageQueueAttr_t sensorQueue_attributes = {
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
+static HAL_StatusTypeDef CommTask_SendResponse(uint8_t command,
+                                               const uint8_t *payload,
+                                               uint8_t payloadLength);
+static void CommTask_HandleFrame(const ProtocolFrame_t *frame);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -104,6 +110,7 @@ void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
   SensorManager_Init();
+  BSP_UART_Init();
 
   /* USER CODE END Init */
 
@@ -204,34 +211,31 @@ void StartSensorTask(void *argument)
 void StartCommTask(void *argument)
 {
   /* USER CODE BEGIN StartCommTask */
-  SensorData_t sensorData;
-  char msg[96];
-  int msgLength;
+  ProtocolParser_t parser;
+  ProtocolFrame_t frame;
+  SensorData_t queuedSensorData;
+
+  Protocol_Init(&parser);
 
   /* Infinite loop */
   for(;;)
   {
-    if (osMessageQueueGet(sensorQueueHandle,
-                          &sensorData,
-                          NULL,
-                          osWaitForever) == osOK)
-    {
-      msgLength = snprintf(msg,
-                           sizeof(msg),
-                           "[Sensor] Raw=%u Voltage=%.3fV Temp=%.1fC Tick=%lu\r\n",
-                           (unsigned int)sensorData.adcRaw,
-                           (double)sensorData.voltage,
-                           (double)sensorData.temperature,
-                           (unsigned long)sensorData.timestamp);
+    BSP_UART_ProcessRx();
 
-      if ((msgLength > 0) && (msgLength < (int)sizeof(msg)))
-      {
-        (void)HAL_UART_Transmit(&huart1,
-                                (uint8_t *)msg,
-                                (uint16_t)msgLength,
-                                HAL_MAX_DELAY);
-      }
+    while (osMessageQueueGet(sensorQueueHandle,
+                             &queuedSensorData,
+                             NULL,
+                             0U) == osOK)
+    {
+      /* Keep the existing SensorTask queue from filling while UART owns CommTask. */
     }
+
+    while (Protocol_Parse(BSP_UART_GetRxRingBuffer(), &parser, &frame))
+    {
+      CommTask_HandleFrame(&frame);
+    }
+
+    osDelay(5);
   }
   /* USER CODE END StartCommTask */
 }
@@ -259,6 +263,89 @@ void StartMonitorTask(void *argument)
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+
+static HAL_StatusTypeDef CommTask_SendResponse(uint8_t command,
+                                               const uint8_t *payload,
+                                               uint8_t payloadLength)
+{
+  uint8_t txFrame[PROTOCOL_MAX_FRAME_LENGTH];
+  uint16_t txLength;
+
+  txLength = Protocol_BuildFrame(command,
+                                 payload,
+                                 payloadLength,
+                                 txFrame,
+                                 sizeof(txFrame));
+
+  if (txLength == 0U)
+  {
+    return HAL_ERROR;
+  }
+
+  return BSP_UART_Send(txFrame, txLength);
+}
+
+static void CommTask_HandleFrame(const ProtocolFrame_t *frame)
+{
+  static const uint8_t version[] = "F407_IndustrialMonitor V0.1.0";
+  static const uint8_t status[] = "STATUS:OK";
+  static const uint8_t reboot[] = "REBOOTING";
+  SensorData_t sensorData;
+  uint8_t sensorPayload[PROTOCOL_MAX_PAYLOAD_LENGTH];
+  int payloadLength;
+
+  if (frame == NULL)
+  {
+    return;
+  }
+
+  switch ((ProtocolCommand_t)frame->command)
+  {
+    case CMD_GET_VERSION:
+      (void)CommTask_SendResponse(frame->command,
+                                  version,
+                                  (uint8_t)(sizeof(version) - 1U));
+      break;
+
+    case CMD_GET_STATUS:
+      (void)CommTask_SendResponse(frame->command,
+                                  status,
+                                  (uint8_t)(sizeof(status) - 1U));
+      break;
+
+    case CMD_GET_SENSOR:
+      SensorManager_GetData(&sensorData);
+      payloadLength = snprintf((char *)sensorPayload,
+                               sizeof(sensorPayload),
+                               "Raw=%u Voltage=%.3fV Temp=%.1fC Tick=%lu",
+                               (unsigned int)sensorData.adcRaw,
+                               (double)sensorData.voltage,
+                               (double)sensorData.temperature,
+                               (unsigned long)sensorData.timestamp);
+
+      if ((payloadLength > 0) &&
+          (payloadLength < (int)sizeof(sensorPayload)))
+      {
+        (void)CommTask_SendResponse(frame->command,
+                                    sensorPayload,
+                                    (uint8_t)payloadLength);
+      }
+      break;
+
+    case CMD_REBOOT:
+      if (CommTask_SendResponse(frame->command,
+                                reboot,
+                                (uint8_t)(sizeof(reboot) - 1U)) == HAL_OK)
+      {
+        osDelay(20);
+        NVIC_SystemReset();
+      }
+      break;
+
+    default:
+      break;
+  }
+}
 
 /* USER CODE END Application */
 
