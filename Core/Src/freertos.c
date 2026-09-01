@@ -30,6 +30,7 @@
 #include "bsp_uart.h"
 #include "cli.h"
 #include "protocol.h"
+#include "system_monitor.h"
 #include <stdio.h>
 
 /* USER CODE END Includes */
@@ -200,7 +201,14 @@ void StartSensorTask(void *argument)
 
     SensorManager_GetData(&sensorData);
 
-    (void)osMessageQueuePut(sensorQueueHandle, &sensorData, 0U, 0U);
+    if (osMessageQueuePut(sensorQueueHandle, &sensorData, 0U, 0U) == osOK)
+    {
+#if SYSTEM_MONITOR_FAULT_INJECTION_ENABLE
+      /* Development fault injection: SensorTask intentionally stops heartbeats. */
+#else
+      SystemMonitor_Heartbeat(SYSTEM_TASK_SENSOR);
+#endif
+    }
 
     osDelay(1000);
   }
@@ -249,6 +257,8 @@ void StartCommTask(void *argument)
                              &binaryFrameActive);
     }
 
+    SystemMonitor_Heartbeat(SYSTEM_TASK_COMM);
+
     osDelay(5);
   }
   /* USER CODE END StartCommTask */
@@ -265,8 +275,11 @@ void StartMonitorTask(void *argument)
 {
   /* USER CODE BEGIN StartMonitorTask */
   /* Infinite loop */
-   for(;;)
+  for(;;)
   {
+    SystemMonitor_Heartbeat(SYSTEM_TASK_MONITOR);
+    SystemMonitor_Process();
+
     HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
 
     osDelay(500);

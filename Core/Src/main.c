@@ -21,6 +21,7 @@
 #include "cmsis_os.h"
 #include "adc.h"
 #include "dma.h"
+#include "iwdg.h"
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
@@ -31,6 +32,8 @@
 #include "app_main.h"
 #include "bsp_w25q128.h"
 #include "config_manager.h"
+#include "error_manager.h"
+#include "system_monitor.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -99,14 +102,26 @@ int main(void)
   MX_USART1_UART_Init();
   MX_ADC1_Init();
   MX_SPI1_Init();
+  MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
+	ErrorManager_Init();
+	SystemMonitor_Init();
+
 	if (BSP_W25Q128_Init() == HAL_OK)
 	{
 		ConfigManager_Init();
+		if (g_configDebug.loadPassed == 0U)
+		{
+			ErrorManager_Report(ERROR_CONFIG_LOAD);
+		}
 
 #if CONFIG_MANAGER_SELF_TEST_ENABLE
 		ConfigManager_SelfTest();
 #endif
+	}
+	else
+	{
+		ErrorManager_Report(ERROR_FLASH_INIT);
 	}
 
 	App_Init();
@@ -167,8 +182,9 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 8;
