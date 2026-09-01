@@ -30,6 +30,7 @@
 #include <string.h>
 #include "app_main.h"
 #include "bsp_w25q128.h"
+#include "config_manager.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -101,7 +102,11 @@ int main(void)
   /* USER CODE BEGIN 2 */
 	if (BSP_W25Q128_Init() == HAL_OK)
 	{
-		BSP_W25Q128_SelfTest();
+		ConfigManager_Init();
+
+#if CONFIG_MANAGER_SELF_TEST_ENABLE
+		ConfigManager_SelfTest();
+#endif
 	}
 
 	App_Init();

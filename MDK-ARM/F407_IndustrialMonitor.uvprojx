@@ -1085,6 +1085,11 @@
               <FileType>1</FileType>
               <FilePath>..\APP\Src\cli.c</FilePath>
             </File>
+            <File>
+              <FileName>config_manager.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\Src\config_manager.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -1114,6 +1119,11 @@
               <FileName>ring_buffer.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\COMMON\Src\ring_buffer.c</FilePath>
+            </File>
+            <File>
+              <FileName>crc32.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\COMMON\Src\crc32.c</FilePath>
             </File>
           </Files>
         </Group>
