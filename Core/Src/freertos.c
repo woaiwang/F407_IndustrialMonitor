@@ -28,6 +28,7 @@
 #include "usart.h"
 #include "sensor_manager.h"
 #include "bsp_uart.h"
+#include "cli.h"
 #include "protocol.h"
 #include <stdio.h>
 
@@ -92,6 +93,11 @@ static HAL_StatusTypeDef CommTask_SendResponse(uint8_t command,
                                                const uint8_t *payload,
                                                uint8_t payloadLength);
 static void CommTask_HandleFrame(const ProtocolFrame_t *frame);
+static void CommTask_ProcessRxByte(uint8_t data,
+                                   ProtocolParser_t *parser,
+                                   ProtocolFrame_t *frame,
+                                   CliContext_t *cli,
+                                   uint8_t *binaryFrameActive);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -213,9 +219,13 @@ void StartCommTask(void *argument)
   /* USER CODE BEGIN StartCommTask */
   ProtocolParser_t parser;
   ProtocolFrame_t frame;
+  CliContext_t cli;
   SensorData_t queuedSensorData;
+  uint8_t receivedData;
+  uint8_t binaryFrameActive = 0U;
 
   Protocol_Init(&parser);
+  CLI_Init(&cli);
 
   /* Infinite loop */
   for(;;)
@@ -230,9 +240,13 @@ void StartCommTask(void *argument)
       /* Keep the existing SensorTask queue from filling while UART owns CommTask. */
     }
 
-    while (Protocol_Parse(BSP_UART_GetRxRingBuffer(), &parser, &frame))
+    while (RingBuffer_Get(BSP_UART_GetRxRingBuffer(), &receivedData))
     {
-      CommTask_HandleFrame(&frame);
+      CommTask_ProcessRxByte(receivedData,
+                             &parser,
+                             &frame,
+                             &cli,
+                             &binaryFrameActive);
     }
 
     osDelay(5);
@@ -344,6 +358,45 @@ static void CommTask_HandleFrame(const ProtocolFrame_t *frame)
 
     default:
       break;
+  }
+}
+
+static void CommTask_ProcessRxByte(uint8_t data,
+                                   ProtocolParser_t *parser,
+                                   ProtocolFrame_t *frame,
+                                   CliContext_t *cli,
+                                   uint8_t *binaryFrameActive)
+{
+  ProtocolParseResult_t parseResult;
+
+  if ((parser == NULL) || (frame == NULL) || (cli == NULL) ||
+      (binaryFrameActive == NULL))
+  {
+    return;
+  }
+
+  if (*binaryFrameActive != 0U)
+  {
+    parseResult = Protocol_ProcessByte(parser, data, frame);
+
+    if (parseResult == PROTOCOL_PARSE_FRAME_READY)
+    {
+      CommTask_HandleFrame(frame);
+    }
+
+    *binaryFrameActive = Protocol_IsReceiving(parser) ? 1U : 0U;
+    return;
+  }
+
+  if (data == PROTOCOL_HEADER_BYTE_0)
+  {
+    (void)Protocol_ProcessByte(parser, data, frame);
+    *binaryFrameActive = Protocol_IsReceiving(parser) ? 1U : 0U;
+  }
+  else if (((data >= 0x20U) && (data <= 0x7EU)) ||
+           (data == '\r') || (data == '\n'))
+  {
+    CLI_ProcessByte(cli, data);
   }
 }
 

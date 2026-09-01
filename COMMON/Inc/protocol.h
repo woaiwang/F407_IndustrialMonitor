@@ -37,8 +37,19 @@ typedef struct
     uint16_t receivedCrc;
 } ProtocolParser_t;
 
+typedef enum
+{
+    PROTOCOL_PARSE_IN_PROGRESS = 0,
+    PROTOCOL_PARSE_FRAME_READY,
+    PROTOCOL_PARSE_ERROR
+} ProtocolParseResult_t;
+
 void Protocol_Init(ProtocolParser_t *parser);
 uint16_t Protocol_CalculateCrc16(const uint8_t *data, uint16_t length);
+ProtocolParseResult_t Protocol_ProcessByte(ProtocolParser_t *parser,
+                                           uint8_t data,
+                                           ProtocolFrame_t *frame);
+bool Protocol_IsReceiving(const ProtocolParser_t *parser);
 bool Protocol_Parse(RingBuffer_t *ringBuffer,
                     ProtocolParser_t *parser,
                     ProtocolFrame_t *frame);

@@ -54,7 +54,6 @@ bool Protocol_Parse(RingBuffer_t *ringBuffer,
                     ProtocolFrame_t *frame)
 {
     uint8_t data;
-    uint8_t index;
 
     if ((ringBuffer == NULL) || (parser == NULL) || (frame == NULL))
     {
@@ -63,99 +62,129 @@ bool Protocol_Parse(RingBuffer_t *ringBuffer,
 
     while (RingBuffer_Get(ringBuffer, &data))
     {
-        switch ((ProtocolParserState_t)parser->state)
+        if (Protocol_ProcessByte(parser, data, frame) ==
+            PROTOCOL_PARSE_FRAME_READY)
         {
-            case PROTOCOL_STATE_WAIT_HEADER_0:
-                if (data == PROTOCOL_HEADER_BYTE_0)
-                {
-                    parser->state = (uint8_t)PROTOCOL_STATE_WAIT_HEADER_1;
-                }
-                break;
-
-            case PROTOCOL_STATE_WAIT_HEADER_1:
-                if (data == PROTOCOL_HEADER_BYTE_1)
-                {
-                    parser->state = (uint8_t)PROTOCOL_STATE_WAIT_LENGTH;
-                }
-                else if (data != PROTOCOL_HEADER_BYTE_0)
-                {
-                    parser->state = (uint8_t)PROTOCOL_STATE_WAIT_HEADER_0;
-                }
-                break;
-
-            case PROTOCOL_STATE_WAIT_LENGTH:
-                if (data > PROTOCOL_MAX_PAYLOAD_LENGTH)
-                {
-                    Protocol_ResetAfterError(parser, data);
-                }
-                else
-                {
-                    parser->length = data;
-                    parser->payloadIndex = 0U;
-                    parser->calculatedCrc = Protocol_UpdateCrc16(0xFFFFU, data);
-                    parser->state = (uint8_t)PROTOCOL_STATE_WAIT_COMMAND;
-                }
-                break;
-
-            case PROTOCOL_STATE_WAIT_COMMAND:
-                parser->command = data;
-                parser->calculatedCrc = Protocol_UpdateCrc16(parser->calculatedCrc,
-                                                              data);
-
-                if (parser->length == 0U)
-                {
-                    parser->state = (uint8_t)PROTOCOL_STATE_WAIT_CRC_LOW;
-                }
-                else
-                {
-                    parser->state = (uint8_t)PROTOCOL_STATE_WAIT_PAYLOAD;
-                }
-                break;
-
-            case PROTOCOL_STATE_WAIT_PAYLOAD:
-                parser->payload[parser->payloadIndex] = data;
-                parser->payloadIndex++;
-                parser->calculatedCrc = Protocol_UpdateCrc16(parser->calculatedCrc,
-                                                              data);
-
-                if (parser->payloadIndex >= parser->length)
-                {
-                    parser->state = (uint8_t)PROTOCOL_STATE_WAIT_CRC_LOW;
-                }
-                break;
-
-            case PROTOCOL_STATE_WAIT_CRC_LOW:
-                parser->receivedCrc = data;
-                parser->state = (uint8_t)PROTOCOL_STATE_WAIT_CRC_HIGH;
-                break;
-
-            case PROTOCOL_STATE_WAIT_CRC_HIGH:
-                parser->receivedCrc |= (uint16_t)data << 8U;
-
-                if (parser->receivedCrc == parser->calculatedCrc)
-                {
-                    frame->command = parser->command;
-                    frame->length = parser->length;
-
-                    for (index = 0U; index < frame->length; index++)
-                    {
-                        frame->payload[index] = parser->payload[index];
-                    }
-
-                    Protocol_Init(parser);
-                    return true;
-                }
-
-                Protocol_ResetAfterError(parser, data);
-                break;
-
-            default:
-                Protocol_Init(parser);
-                break;
+            return true;
         }
     }
 
     return false;
+}
+
+ProtocolParseResult_t Protocol_ProcessByte(ProtocolParser_t *parser,
+                                           uint8_t data,
+                                           ProtocolFrame_t *frame)
+{
+    uint8_t index;
+
+    if ((parser == NULL) || (frame == NULL))
+    {
+        return PROTOCOL_PARSE_ERROR;
+    }
+
+    switch ((ProtocolParserState_t)parser->state)
+    {
+        case PROTOCOL_STATE_WAIT_HEADER_0:
+            if (data == PROTOCOL_HEADER_BYTE_0)
+            {
+                parser->state = (uint8_t)PROTOCOL_STATE_WAIT_HEADER_1;
+            }
+            break;
+
+        case PROTOCOL_STATE_WAIT_HEADER_1:
+            if (data == PROTOCOL_HEADER_BYTE_1)
+            {
+                parser->state = (uint8_t)PROTOCOL_STATE_WAIT_LENGTH;
+            }
+            else if (data != PROTOCOL_HEADER_BYTE_0)
+            {
+                Protocol_Init(parser);
+                return PROTOCOL_PARSE_ERROR;
+            }
+            break;
+
+        case PROTOCOL_STATE_WAIT_LENGTH:
+            if (data > PROTOCOL_MAX_PAYLOAD_LENGTH)
+            {
+                Protocol_ResetAfterError(parser, data);
+                return PROTOCOL_PARSE_ERROR;
+            }
+
+            parser->length = data;
+            parser->payloadIndex = 0U;
+            parser->calculatedCrc = Protocol_UpdateCrc16(0xFFFFU, data);
+            parser->state = (uint8_t)PROTOCOL_STATE_WAIT_COMMAND;
+            break;
+
+        case PROTOCOL_STATE_WAIT_COMMAND:
+            parser->command = data;
+            parser->calculatedCrc = Protocol_UpdateCrc16(parser->calculatedCrc,
+                                                          data);
+
+            if (parser->length == 0U)
+            {
+                parser->state = (uint8_t)PROTOCOL_STATE_WAIT_CRC_LOW;
+            }
+            else
+            {
+                parser->state = (uint8_t)PROTOCOL_STATE_WAIT_PAYLOAD;
+            }
+            break;
+
+        case PROTOCOL_STATE_WAIT_PAYLOAD:
+            parser->payload[parser->payloadIndex] = data;
+            parser->payloadIndex++;
+            parser->calculatedCrc = Protocol_UpdateCrc16(parser->calculatedCrc,
+                                                          data);
+
+            if (parser->payloadIndex >= parser->length)
+            {
+                parser->state = (uint8_t)PROTOCOL_STATE_WAIT_CRC_LOW;
+            }
+            break;
+
+        case PROTOCOL_STATE_WAIT_CRC_LOW:
+            parser->receivedCrc = data;
+            parser->state = (uint8_t)PROTOCOL_STATE_WAIT_CRC_HIGH;
+            break;
+
+        case PROTOCOL_STATE_WAIT_CRC_HIGH:
+            parser->receivedCrc |= (uint16_t)data << 8U;
+
+            if (parser->receivedCrc == parser->calculatedCrc)
+            {
+                frame->command = parser->command;
+                frame->length = parser->length;
+
+                for (index = 0U; index < frame->length; index++)
+                {
+                    frame->payload[index] = parser->payload[index];
+                }
+
+                Protocol_Init(parser);
+                return PROTOCOL_PARSE_FRAME_READY;
+            }
+
+            Protocol_ResetAfterError(parser, data);
+            return PROTOCOL_PARSE_ERROR;
+
+        default:
+            Protocol_Init(parser);
+            return PROTOCOL_PARSE_ERROR;
+    }
+
+    return PROTOCOL_PARSE_IN_PROGRESS;
+}
+
+bool Protocol_IsReceiving(const ProtocolParser_t *parser)
+{
+    if (parser == NULL)
+    {
+        return false;
+    }
+
+    return (parser->state != (uint8_t)PROTOCOL_STATE_WAIT_HEADER_0);
 }
 
 uint16_t Protocol_BuildFrame(uint8_t command,
