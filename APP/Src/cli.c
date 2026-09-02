@@ -76,7 +76,7 @@ static void CLI_Execute(CliContext_t *context)
         "  sensor\r\n"
         "  version\r\n"
         "  reboot\r\n";
-    static const char versionText[] = "F407_IndustrialMonitor V0.1.0\r\n";
+    static const char versionText[] = "F407_IndustrialMonitor V0.1.1\r\n";
     static const char unknownText[] = "Unknown command. Type 'help'.\r\n";
     static const char tooLongText[] = "Command too long.\r\n";
     static const char rebootText[] = "Rebooting...\r\n";

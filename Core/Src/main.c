@@ -129,7 +129,7 @@ int main(void)
     "\r\n"
     "================================\r\n"
     "F407 Industrial Monitor Start\r\n"
-    "Version: 0.1.0\r\n"
+    "Version: 0.1.1\r\n"
     "================================\r\n";
 
 HAL_UART_Transmit(&huart1,

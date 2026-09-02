@@ -11,7 +11,7 @@ void App_Init(void)
         "\r\n"
         "================================\r\n"
         "F407 Industrial Monitor\r\n"
-        "Firmware Version: 0.1.0\r\n"
+        "Firmware Version: 0.1.1\r\n"
         "System Init OK\r\n"
         "================================\r\n";
 

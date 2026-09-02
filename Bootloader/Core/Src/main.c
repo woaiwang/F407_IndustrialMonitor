@@ -2,10 +2,13 @@
 
 #include "boot_application.h"
 #include "boot_config.h"
+#include "boot_protocol.h"
 #include "usart.h"
 
 #define BOOT_SEND_LITERAL(text) \
     Boot_Send((const uint8_t *)(text), (uint16_t)(sizeof(text) - 1U))
+
+#define BOOT_PROTOCOL_ENTRY_CLEANUP_TIMEOUT_MS 30U
 
 static const uint8_t bootUpgradeAck = BOOT_UPGRADE_ACK_BYTE;
 
@@ -29,6 +32,33 @@ static bool Boot_UpgradeRequested(void)
     return (receivedByte == BOOT_UPGRADE_HANDSHAKE_BYTE);
 }
 
+static void Boot_DiscardHandshakeResidue(void)
+{
+    uint8_t receivedByte;
+    uint32_t startTick = HAL_GetTick();
+
+    while ((HAL_GetTick() - startTick) <
+           BOOT_PROTOCOL_ENTRY_CLEANUP_TIMEOUT_MS)
+    {
+        if (HAL_UART_Receive(&huart1, &receivedByte, 1U, 1U) != HAL_OK)
+        {
+            continue;
+        }
+
+        if (receivedByte != BOOT_UPGRADE_HANDSHAKE_BYTE)
+        {
+            break;
+        }
+    }
+}
+
+static void Boot_EnterProtocolMode(void)
+{
+    Boot_Send(&bootUpgradeAck, 1U);
+    Boot_DiscardHandshakeResidue();
+    Boot_Protocol_Run();
+}
+
 static void Boot_StayInBootloader(void)
 {
     uint8_t receivedByte;
@@ -42,7 +72,7 @@ static void Boot_StayInBootloader(void)
         {
             if (receivedByte == BOOT_UPGRADE_HANDSHAKE_BYTE)
             {
-                Boot_Send(&bootUpgradeAck, 1U);
+                Boot_EnterProtocolMode();
             }
         }
     }
@@ -57,9 +87,7 @@ int main(void)
 
     if (Boot_UpgradeRequested())
     {
-        BOOT_SEND_LITERAL("Upgrade request acknowledged\r\nStay Bootloader\r\n");
-        Boot_Send(&bootUpgradeAck, 1U);
-        Boot_StayInBootloader();
+        Boot_EnterProtocolMode();
     }
 
     if (Boot_ApplicationIsValid())

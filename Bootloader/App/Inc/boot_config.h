@@ -3,8 +3,16 @@
 
 #include <stdint.h>
 
-#define BOOT_APP_ADDRESS                 0x08010000UL
+#define BOOT_FLASH_START                 0x08000000UL
+#define BOOT_BOOTLOADER_ADDRESS          BOOT_FLASH_START
+#define BOOT_BOOTLOADER_END              0x08010000UL
+
+#define BOOT_APP_ADDRESS                 BOOT_BOOTLOADER_END
 #define BOOT_APP_END                     0x08100000UL
+#define BOOT_APP_MAX_SIZE                (BOOT_APP_END - BOOT_APP_ADDRESS)
+
+#define BOOT_APP_FIRST_FLASH_SECTOR      4U
+#define BOOT_APP_LAST_FLASH_SECTOR       11U
 
 #define BOOT_SRAM_START                  0x20000000UL
 #define BOOT_SRAM_END                    0x20020000UL

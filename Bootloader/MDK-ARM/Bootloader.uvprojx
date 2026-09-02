@@ -425,6 +425,21 @@
               <FileType>1</FileType>
               <FilePath>../App/Src/boot_application.c</FilePath>
             </File>
+            <File>
+              <FileName>boot_crc32.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../App/Src/boot_crc32.c</FilePath>
+            </File>
+            <File>
+              <FileName>boot_flash.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../App/Src/boot_flash.c</FilePath>
+            </File>
+            <File>
+              <FileName>boot_protocol.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../App/Src/boot_protocol.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

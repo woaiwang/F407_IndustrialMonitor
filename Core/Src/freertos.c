@@ -314,7 +314,7 @@ static HAL_StatusTypeDef CommTask_SendResponse(uint8_t command,
 
 static void CommTask_HandleFrame(const ProtocolFrame_t *frame)
 {
-  static const uint8_t version[] = "F407_IndustrialMonitor V0.1.0";
+  static const uint8_t version[] = "F407_IndustrialMonitor V0.1.1";
   static const uint8_t status[] = "STATUS:OK";
   static const uint8_t reboot[] = "REBOOTING";
   SensorData_t sensorData;
