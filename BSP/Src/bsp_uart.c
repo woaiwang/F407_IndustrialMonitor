@@ -11,9 +11,18 @@ static uint8_t s_rxByte;
 static uint8_t s_rxRingStorage[BSP_UART_RX_RING_BUFFER_SIZE];
 static RingBuffer_t s_rxRingBuffer;
 
-volatile uint32_t g_uartRxByteCount = 0;
+volatile uint32_t rxArmCount = 0;
+volatile uint32_t rxCallbackCount = 0;
+volatile uint32_t rxByteCount = 0;
+volatile uint32_t rxErrorCount = 0;
+volatile uint32_t lastRxByte = 0;
+volatile uint32_t lastHalStatus = (uint32_t)HAL_OK;
+volatile uint32_t uartRxState = (uint32_t)HAL_UART_STATE_RESET;
+volatile uint32_t uartErrorCode = (uint32_t)HAL_UART_ERROR_NONE;
+
 volatile uint32_t g_uartRingOverflowCount = 0;
-volatile uint32_t g_uartRxErrorCount = 0;
+
+static HAL_StatusTypeDef BSP_UART_ArmReceive(void);
 
 void BSP_UART_Init(void)
 {
@@ -30,8 +39,8 @@ void BSP_UART_Init(void)
                     s_rxRingStorage,
                     BSP_UART_RX_RING_BUFFER_SIZE);
 
-    /* UART RX DMA temporarily disabled at application level. */
-    (void)HAL_UART_Receive_IT(&huart1, &s_rxByte, 1U);
+    /* UART RX DMA remains disabled; application RX uses one-byte interrupt mode. */
+    (void)BSP_UART_ArmReceive();
 }
 
 void BSP_UART_ProcessRx(void)
@@ -62,16 +71,17 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         return;
     }
 
-    if (RingBuffer_Put(&s_rxRingBuffer, s_rxByte))
-    {
-        g_uartRxByteCount++;
-    }
-    else
+    rxCallbackCount++;
+    rxByteCount++;
+    lastRxByte = s_rxByte;
+
+    if (!RingBuffer_Put(&s_rxRingBuffer, s_rxByte))
     {
         g_uartRingOverflowCount++;
     }
 
-    (void)HAL_UART_Receive_IT(&huart1, &s_rxByte, 1U);
+    /* HAL restores RxState to READY before this callback; arm the next byte. */
+    (void)BSP_UART_ArmReceive();
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
@@ -81,6 +91,25 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
         return;
     }
 
-    g_uartRxErrorCount++;
-    (void)HAL_UART_Receive_IT(&huart1, &s_rxByte, 1U);
+    rxErrorCount++;
+    uartErrorCode = (uint32_t)huart1.ErrorCode;
+    uartRxState = (uint32_t)huart1.RxState;
+
+    /* ORE aborts reception and leaves RxState READY; FE/NE can leave it armed. */
+    if (huart1.RxState == HAL_UART_STATE_READY)
+    {
+        (void)BSP_UART_ArmReceive();
+    }
+}
+
+static HAL_StatusTypeDef BSP_UART_ArmReceive(void)
+{
+    HAL_StatusTypeDef status;
+
+    rxArmCount++;
+    status = HAL_UART_Receive_IT(&huart1, &s_rxByte, 1U);
+    lastHalStatus = (uint32_t)status;
+    uartRxState = (uint32_t)huart1.RxState;
+
+    return status;
 }

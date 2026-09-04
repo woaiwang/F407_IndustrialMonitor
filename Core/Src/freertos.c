@@ -72,7 +72,8 @@ const osThreadAttr_t SensorTask_attributes = {
 osThreadId_t CommTaskHandle;
 const osThreadAttr_t CommTask_attributes = {
   .name = "CommTask",
-  .stack_size = 128 * 4,
+  /* Linker reports 648 bytes plus unknown snprintf-library usage on this path. */
+  .stack_size = 384 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for MonitorTask */

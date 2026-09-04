@@ -175,7 +175,8 @@ void SystemMonitor_Process(void)
              (s_taskStates[SYSTEM_TASK_MONITOR].isAlive != 0U)) ? 1U : 0U;
     }
 
-    if (s_allCriticalTasksHealthy != 0U)
+    /* IWDG may be intentionally uninitialized during UART debug verification. */
+    if ((hiwdg.Instance == IWDG) && (s_allCriticalTasksHealthy != 0U))
     {
         if (HAL_IWDG_Refresh(&hiwdg) == HAL_OK)
         {
